@@ -34,7 +34,7 @@ def get_key_state():
         key_presses.clear()
     return '+'.join(pressed_keys)
 
-def capture_window_screenshots(window_name, interval=0.15, save_folder="data"):
+def capture_window_screenshots(window_name, interval=0.15, save_folder="data", downsample_factor=2, jpeg_quality=90):
     rect = get_window_coordinates(window_name)
     if rect:
         x1, y1, x2, y2 = rect
@@ -45,10 +45,23 @@ def capture_window_screenshots(window_name, interval=0.15, save_folder="data"):
                 start_time = time.perf_counter()
                 img = sct.grab(monitor)
                 img = np.array(img)
-                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+
+                # Crop a few pixels off the top and right
+                cropped_img = img[35:, :-35]
+
+                # Convert to grayscale
+                gray_img = cv2.cvtColor(cropped_img, cv2.COLOR_BGRA2GRAY)
+
+                # Downsample the image
+                downsampled_width = gray_img.shape[1] // downsample_factor
+                downsampled_height = gray_img.shape[0] // downsample_factor
+                downsampled_img = cv2.resize(gray_img, (downsampled_width, downsampled_height), interpolation=cv2.INTER_AREA)
+
                 keys_pressed = get_key_state()
-                filename = os.path.join(save_folder, f"screenshot_{count:04d}_{keys_pressed}.png")
-                cv2.imwrite(filename, img)
+                filename = os.path.join(save_folder, f"screenshot_{count:04d}_{keys_pressed}.jpg")
+
+                # Save the image as JPEG with specified quality
+                cv2.imwrite(filename, downsampled_img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
                 count += 1
                 elapsed = time.perf_counter() - start_time
                 time.sleep(max(0, interval - elapsed))
@@ -58,8 +71,11 @@ def main():
         shutil.rmtree("data")
     os.makedirs("data")
     window_name = "BlueStacks App Player"
+    
+    downsample_factor = 3 
+    jpeg_quality = 90 
     keyboard.hook(on_key_event)
-    threading.Thread(target=capture_window_screenshots, args=(window_name,), daemon=True).start()
+    threading.Thread(target=capture_window_screenshots, args=(window_name, 0.15, "data", downsample_factor, jpeg_quality), daemon=True).start()
     keyboard.wait('esc')
 
 if __name__ == "__main__":
